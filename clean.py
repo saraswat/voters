@@ -62,13 +62,13 @@ def date_to_string(date):
                      '{0:04d}'.format(date['year'])])
                          
     
-MMDDYYYY = '([0-9]{2}/[0-9]{2}/[0-9]{4})'
+
 def clean(line, town='CA', city_in=' (MAHOPAC|CARMEL|PUTNAM VALLEY) '):
     "Clean the data obtained from running tika on a pdf containing voter records"
     pre, town, ward, district, post=re.split("(" + town + ")/(\d{3})/(\d{3})", line)
     r_town_ward={'town':town, 'ward':ward, 'district':district}
 
-    x=re.split("\W(DEM|REP)\W", pre+post)
+    x=re.split(AFFS, pre+post)
     assert len(x)==3, 'pre, aff, post |' + str(x) + '|'
     pre, aff, post = x
     r_aff=aff
@@ -104,30 +104,34 @@ def clean(line, town='CA', city_in=' (MAHOPAC|CARMEL|PUTNAM VALLEY) '):
                  r_sex, r_dob, r_registered, r_status)
 
 
+TOWNS = 'PATTERSON|CARMEL|KENT|PHILIPSTOWN|PUTNAM VALLEY|SOUTHEAST'
+GENDER = 'M|F'
+MMDDYYYY = '([0-9]{2}/[0-9]{2}/[0-9]{4})'
+AFFS = '\W(DEM|REP|BLK|CON|IND)\W'
+Voter_ID = '\d{8}'
+LINE = ""
+
 IGNORES = [
     'Ward/Dist Sex Date of Birth Registered Status',
-    'Putnam County Board of Elections',
-    '9:01 am Detailed Voter Master Call List',
     'CityVoter ID Name Street Address AFF Phone',
-    'Town of: CARMEL',
     'Party of DEM',
     'Voter Status of A - Active',
     'Ordered by Town/Ward/District, Street Address',
     'Break on Town/Ward/District',
     'Report Criteria:',
     'TEAM SQL Version 6.7.3 Copyright © NTS Data Services, LLC.',
-    'User: ANDREAB Station: BOE-03',
     'r_avtrcd',
-    'Page 205/30/2017 Putnam County Board of Elections',
     'Town',
-    'CARMEL, District 1',
     'WEBCORRECT'
     ]
 
 IGNORE_PATTERNS = [
-    '(CARMEL, District \d*)',
+    '(' + TOWNS+',\WDistrict \d*)',
     '(Putnam County Board of Elections)',
-    '(Voters Reported)'
+    '(Town of:)',
+    '(Detailed Voter Master Call List'),
+    '(Voters Reported)',
+    '(User:\W\w*\W Station: BOE-)',
     ]
 
 def ignore(line):
