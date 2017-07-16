@@ -7,39 +7,74 @@ All rights reserved
 import re
 import csv
 import json
+from pprint import pprint
 from json import JSONEncoder
 
+YYYYMMDD = '(\d{4})(\d{2})(\d{2})'
 def non_empty_list(l, empty=''):
     for x in l:
         if x != empty:
             return True
     return False
 
-def set_item(obj, attr, v, empty='', bypass=True):
-    if not bypass:
-        if type(v) is list and not non_empty_list(v, empty):
-            return
-        if v == empty:
-            return
+def set_item(obj, attr, size, v):
+    """
+    The original idea was not to store empty fields. Now storing all fields, 
+    checking for errors. Later passes will produce more abstract versions
+    of the data.
+    """
     if type(obj) is dict:
         obj[attr]=v
     else: 
         setattr(obj, attr, v)
+    if type(size) is list:
+        if not (type(v) is list and len(v)==len(size)):
+            return set([('expected list of ' + len(size) + ' elements, of size ' + size)])
+        devs = [('length error', attr, vv, s)
+                for vv, s in zip(v, size)
+                if len(vv) > s]
+        return set(devs)
+    return set() if len(v) <= size else set([('length error', attr, size, v)])
 
-def set_YYYYMMDD(obj, attr, date):
-    if date == '':
-        return
-    ignore, year, month, day, ignore = re.split('(\d{4})(\d{2})(\d{2})',date)
+def set_patt(obj, attr, patt, v, must_have=False):
+    "Check the value (it must exist), satisfies the pattern"
+    if type(obj) is dict:
+        obj[attr] = v
+    else:
+        setattr(obj, attr, v)
+    if v == '':
+        return set([('empty, expected patt', attr, patt, v)]) if must_have else set()
+    test = re.fullmatch(patt, v)
+    return set() if test != None else set([('match failed', attr, patt, v)]) 
+
+
+def set_YYYYMMDD(obj, attr, v, must_have=False):
+    if type(obj) is dict:
+        obj[attr] = v
+    else:
+        setattr(obj, attr, v)
+    if v == '':
+        return set([('empty, expected YYYYMMDD', attr, v)]) if must_have else set()
+    test=re.fullmatch(YYYYMMDD, v)
+    if test == None:
+        return set([('date YYYYMMDD error', attr, v)])
+    ignore, year, month, day, ignore = re.split(YYYYMMDD, v)
     date =  {'year':int(year), 'month':int(month), 'day':int(day)}
     if type(obj) is dict:
         obj[attr] = date
     else:
         setattr(obj, attr, date)
+    return set()
 
 def set_history_codes(obj, attr, codes, bypass=True):
-    if not bypass:
-        if not non_empty_list(codes):
-            return
+    if type(obj) is dict:
+        obj[attr] = codes
+    else:
+        setattr(obj, attr, codes)
+    "TODO: Check for failure of this pattern first"
+    test = re.fullmatch('(\w{4})*', codes)
+    if test == None:
+        return set([('history code error', attr, codes)])
     codes = [{'year':x[3], 'type':x[1]} 
              for r in re.split('(\w{4})', codes) 
              if r !='' 
@@ -48,6 +83,8 @@ def set_history_codes(obj, attr, codes, bypass=True):
         obj[attr] = codes
     else:
         setattr(obj, attr, codes)
+    return set()
+
 
 FORMAT_DEFINITION = {
     'file_name': 'NTS VTR EXPORT FILE FORMAT STANDARD.pdf',
@@ -105,90 +142,91 @@ class Voter:
        Received 07/10/2017 via email from Barbara Spofford at BoE in response to a FOIL.
     """
     def __init__(self,l):
-        set_item(self, 'voter_id', l[0])                  # 15 chars
-
+        dev = set()
+        dev |= set_item(self, 'voter_id',    15, l[0])              # 15 chars
         name={}
-        set_item(name, 'first_name', l[1])                # 15 chars
-        set_item(name, 'middle_name', l[2])               # 15 chars
-        set_item(name, 'last_name', l[3])                 # 20 chars
-        set_item(name, 'suffix', l[4])                    # 4 chars
+        dev |= set_item(name, 'first_name',  15, l[1])              # 15 chars
+        dev |= set_item(name, 'middle_name', 15, l[2])              # 15 chars
+        dev |= set_item(name, 'last_name',   20, l[3])              # 20 chars
+        dev |= set_item(name, 'suffix',       4, l[4])              # 4 chars
         if name != {}:
-            set_item(self, 'name', name)
+            self.name = name
 
         addr={}
-        set_item(addr, 'street_number', l[5])             # 8 chars
-        set_item(addr, 'half_code', l[6])                 # 5 chars ... "1/2"
-        set_item(addr, 'street_name', l[7])               # 30 chars
-        set_item(addr, 'apt_number', l[8])                # 12 chars
-        set_item(addr, 'address_lines', l[9:11])          # 2 x 40 chars
-        set_item(addr, 'city', l[11])                     # 25 chars
-        set_item(addr, 'state', l[12])                    # 2 chars
-        set_item(addr, 'zip', l[13])                      # 5 chars
-        set_item(addr, 'zip_plus', l[14])                 # 4 chars
+        dev |= set_item(addr, 'street_number', 8, l[5])             # 8 chars
+        dev |= set_item(addr, 'half_code',     5, l[6])             # 5 chars ... "1/2"
+        dev |= set_item(addr, 'street_name',  30, l[7])             # 30 chars
+        dev |= set_item(addr, 'apt_number',   12, l[8])             # 12 chars
+        dev |= set_item(addr, 'address_lines', [40, 40], l[9:11])   # 2 x 40 chars
+        dev |= set_item(addr, 'city',         25, l[11])            # 25 chars
+        dev |= set_item(addr, 'state',         2, l[12])            # 2 chars
+        dev |= set_item(addr, 'zip',           5, l[13])            # 5 chars
+        dev |= set_item(addr, 'zip_plus',      4, l[14])            # 4 chars
         if addr != {}:
-            set_item(self, 'address', addr)       
+            self.address = addr
 
-        set_item(self, 'file_date', l[15])                # 15 chars
-        set_YYYYMMDD(self, 'dob', l[16])                  # YYYYMMDD=\d{4}\d{2}\d{2}
+        dev |= set_item(self, 'file_date', 15, l[15])               # 15 chars
+        dev |= set_YYYYMMDD(self, 'dob', l[16])                     # YYYYMMDD=\d{4}\d{2}\d{2}
 
-        set_item(self, 'sex', l[17])                      # M|F
-        set_item(self, 'eye', l[18])                      # 3 chars
-        set_item(self, 'height', l[19:21])                # ft 1 char, inches 2 char
-        set_item(self, 'area_code', l[21])                # 3 chars
-        set_item(self, 'tel_number', l[22])               # \d{3}-\d{4}
-        set_YYYYMMDD(self, 'reg_date', l[23])             # YYYYMMDD=\d{4}\d{2}\d{2}
+        dev |= set_patt(self, 'sex', 'M|F', l[17])                  # M|F
+        dev |= set_item(self, 'eye',       3, l[18])                # 3 chars
+        dev |= set_item(self, 'height',    [1,1], l[19:21])         # ft 1 char, inches 2 char
+        dev |= set_patt(self, 'area_code', '\d{3}', l[21])          # 3 chars
+        dev |= set_patt(self, 'tel_number', '(\d{3})?-(\d{4})?', l[22])   # \d{3}-\d{4}
+        dev |= set_YYYYMMDD(self, 'reg_date', l[23])                # YYYYMMDD=\d{4}\d{2}\d{2}
         
-        set_item(self, 'reg_source', l[24])               # 10 chars
-        set_item(self, 'filler', l[25])                   # 20 chars
-        set_item(self, 'affiliation', l[26])              # 3 chars 
-        set_item(self, 'town', l[27])                     # 3 chars
-        set_item(self, 'ward', l[28])                     # 3 chars
-        set_item(self, 'dist', l[29])                     # 3 chars
-        set_item(self, 'congress_dist', l[30])            # 3 chars
-        set_item(self, 'senatorial_dist', l[31])          # 3 chars
-        set_item(self, 'assembly_dist', l[32])            # 3 chars
-        set_item(self, 'school_dist', l[33])              # 3 chars
-        set_item(self, 'county_dist', l[34])              # 3 chars
-        set_item(self, 'village_dist', l[35])             # 3 chars
-        set_item(self, 'fire_dist', l[36])                # 3 chars
-        set_item(self, 'lib_dist', l[37])                 # 3 chars
-        set_item(self, 'voter_status', l[38])             # A|I|P
-        set_item(self, 'reason', l[39])                   # \w{10}
-        set_item(self, 'absentee', l[40])                 # Y|N
+        dev |= set_item(self, 'reg_source',    10, l[24])        # 10 chars
+        dev |= set_item(self, 'filler',        20, l[25])        # 20 chars
+        dev |= set_item(self, 'affiliation',    3, l[26])        # 3 chars 
+        dev |= set_item(self, 'town',           3, l[27])        # 3 chars
+        dev |= set_item(self, 'ward',           3, l[28])        # 3 chars
+        dev |= set_item(self, 'dist',           3, l[29])        # 3 chars
+        dev |= set_item(self, 'congress_dist',  3, l[30])        # 3 chars
+        dev |= set_item(self, 'senatorial_dist',3, l[31])        # 3 chars
+        dev |= set_item(self, 'assembly_dist',  3, l[32])        # 3 chars
+        dev |= set_item(self, 'school_dist',    3, l[33])        # 3 chars
+        dev |= set_item(self, 'county_dist',    3, l[34])        # 3 chars
+        dev |= set_item(self, 'village_dist',   3, l[35])        # 3 chars
+        dev |= set_item(self, 'fire_dist',      3, l[36])        # 3 chars
+        dev |= set_item(self, 'lib_dist',       3, l[37])        # 3 chars
+        dev |= set_patt(self, 'voter_status', 'A|I|P', l[38])    # A|I|P
+        dev |= set_item(self, 'reason',        10, l[39])        # \w{10}
+        dev |= set_patt(self, 'absentee',      'Y|N', l[40])     # Y|N
 
         mailing={}
-        set_item(mailing, 'address', l[41:45])            # 4 x 40
-        set_item(mailing, 'city',l[45])                   # 25
-        set_item(mailing, 'state', l[46])                 # 2
-        set_item(mailing, 'zip', l[47])                   # \d{5}
-        set_item(mailing, 'zip_plus', l[48])              # \d{4}
+        dev |= set_item(mailing, 'address', [40,40,40,40],l[41:45])  # 4 x 40
+        dev |= set_item(mailing, 'city',    25, l[45])               # 25
+        dev |= set_item(mailing, 'state',    2, l[46])               # 2
+        dev |= set_patt(mailing, 'zip', '\d{5}', l[47])              # \d{5}
+        dev |= set_patt(mailing, 'zip_plus', '\d{4}', l[48])         # \d{4}
         if mailing != {}:
-            set_item(self, 'mailing', mailing)
+            self.mailing = mailing
 
         absentee={}
-        set_item(absentee, 'election code', l[49]),
-        set_item(absentee, 'code', l[50])                   # 4
-        set_item(absentee, 'application received date', l[51]) # YYYYMMDD
+        dev |= set_item(absentee, 'election_code', 4, l[49])           # 4
+        dev |= set_item(absentee, 'code',          3, l[50])           # 3
+        dev |= set_YYYYMMDD(absentee, 'application_received_date', l[51]) # YYYYMMDD
         absentee_add ={}
-        set_item(absentee_add, 'add', l[52:56])              # 4 x 40 chars
-        set_item(absentee_add, 'city',l[56])                 # 25 chars
-        set_item(absentee_add, 'state',l[57])                # 2 chars
-        set_item(absentee_add, 'zip', l[58])                 # 5 chars
-        set_item(absentee_add, 'zip_plus',l[59])             # 4 chars
+        dev |= set_item(absentee_add, 'add', [40,40,40,40], l[52:56])  # 4 x 40 chars
+        dev |= set_item(absentee_add, 'city',    25, l[56])            # 25 chars
+        dev |= set_item(absentee_add, 'state',    2, l[57])            # 2 chars
+        dev |= set_patt(absentee_add, 'zip',  '\d{5}', l[58])          # 5 chars
+        dev |= set_patt(absentee_add, 'zip_plus','\d{4}', l[59])       # 4 chars
         if absentee_add !={}:
-            set_item(absentee, 'add', absentee_add)
-        set_YYYYMMDD(absentee, 'ballot issued date',      l[60])       
-        set_YYYYMMDD(absentee, 'ballot received date',    l[61])     
-        set_YYYYMMDD(absentee, 'ballot re-issued date',   l[62])    
-        set_YYYYMMDD(absentee, 'ballot re-received date', l[63])  
-        set_YYYYMMDD(absentee, 'expiration_date', l[64])          
-        set_item(absentee, 'eligible', l[65])                 # 'Y'/'N'
-        set_item(absentee, 'ineligible_reason', l[66])        # 40 chars
+            absentee['add'] = absentee_add
+        dev |= set_YYYYMMDD(absentee, 'ballot_issued_date',      l[60])       
+        dev |= set_YYYYMMDD(absentee, 'ballot_received_date',    l[61])     
+        dev |= set_YYYYMMDD(absentee, 'ballot_re_issued_date',   l[62])    
+        dev |= set_YYYYMMDD(absentee, 'ballot_re_received_date', l[63])  
+        dev |= set_YYYYMMDD(absentee, 'expiration_date', l[64])          
+        dev |= set_patt(absentee, 'eligible', 'Y|N', l[65])              # 'Y'/'N'
+        dev |= set_item(absentee, 'ineligible_reason', 40, l[66])        # 40 chars
         if absentee != {}:
-            set_item(self, 'absentee', absentee)
+            self.absentee = absentee
 
-        set_history_codes(self, 'history_codes', l[-2])      # should be 12 x 4-char codes
+        dev |= set_history_codes(self, 'history_codes', l[-2])      # should be 12 x 4-char codes
         # vj: hack for now, to work around bugs in rows
+        self.deviations = dev
         
     def get_name(self):
         res = self.name['last_name'] + "," + self.name['first_name']
@@ -199,9 +237,15 @@ class Voter:
         return res
 
     def __repr__(self):
-        return "<Voter {}>".format(self.get_name())
+        return "<Voter {}, voter_id=...{}>".format(self.get_name(), self.voter_id[-4:])
     def __str__(self):
-        return "<Voter {}>".format(self.get_name())
+        return "<Voter {}, voter_id=...{}>".format(self.get_name(), self.voter_id[-4:])
+    def validate(self):
+        "Return list of all deviations against the spec."
+        devs =[]
+        devs = check_length(self, 'voter_id', 15)
+        devs = check_length(self, 'first_name', 15)
+        
     # end Voter
 
 
@@ -225,6 +269,13 @@ def write_json(data, fn):
     with open(fn, 'w') as fp:
         json.dump(data, fp, cls=VoterEncoder,ensure_ascii=False, indent=4, sort_keys=True)
 
+
+def print_errors_in_voting_records(results, raws):
+    "(results, raws) obtained after a read_file(...)"
+    for ind, (result, raw) in enumerate(zip(results,raws)):
+        if result.deviations != set():
+            pprint((ind, result, len(raw), result.deviations))
+        
 def voting_record(votes):
     "Given a voting record as a string 'GE09PE04', return the list of elections."
     if votes=='':
