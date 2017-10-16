@@ -1,2 +1,32 @@
-The voter history field is challenging. The first four bytes represents the most recent election in which the individual voted. The next four votes are the immediately prior election and so on. In each four byte field the first two are the election type and the last two are the year. I believe that library elections and school board elections are tracked elsewhere. GE is general election and the other codes are various primaries. In 2016 I believe that there were three primary elections, one for state and local offices, one for federal offices other than President, and the Presidential primary. They were, I believe, coded as GE, FP, PP and PE. I could guess which codes go with which type of election but I have no key. I do not think that we really need to crack this as I do not foresee any real need to know which voters or how many voters voted  in a particular type of primary. My understanding of the need is for analysis of frequency of voting, which could be approximated by ((number of nonblank characters)/4)/(years since initial registration)
+The voter history field is challenging.
+
+The first four bytes represents the most recent election in which the
+individual voted.
+
+The next four votes are the immediately prior election and so on.
+
+In each four byte field the first two are the election type and the
+last two are the year.
+
+I believe that library elections and school board elections are
+tracked elsewhere.
+
+GE is general election and the other codes are various primaries.
+
+In 2016 I believe that there were three primary elections, one for
+state and local offices, one for federal offices other than President,
+and the Presidential primary.
+
+They were, I believe, coded as GE, FP, PP and PE.
+
+I could guess which codes go with which type of election but I have no
+key.
+
+I do not think that we really need to crack this as I do not foresee
+any real need to know which voters or how many voters voted  in a
+particular type of primary.
+
+My understanding of the need is for analysis of frequency of voting,
+which could be approximated by ((number of nonblank
+characters)/4)/(years since initial registration)  
 

@@ -133,6 +133,7 @@ LIBRARY_DISTRICT_CODES={
     '001': 'Mahopac Library Dist'
     }
 
+# BLK=Blank
 AFFILIATIONS={'BLK', 'CON', 'DEM', 'GRE', 'IND', 'LBT', 'OTH', 'REF', 'REP', 'WEP', 'WOR'}
 
 
